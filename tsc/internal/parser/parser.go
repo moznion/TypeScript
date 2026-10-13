@@ -85,6 +85,7 @@ type Parser struct {
 
 	identifierCount            int
 	notParenthesizedArrow      collections.Set[int]
+	notTypeArguments           collections.Set[int]
 	nodeSliceArena             core.Arena[*ast.Node]
 	stringSliceArena           core.Arena[string]
 	jsdocInfos                 []JSDocInfo
@@ -5337,6 +5338,14 @@ func (p *Parser) tryParseTypeArgumentsInExpression() *ast.NodeList {
 	if p.contextFlags&ast.NodeFlagsJavaScriptFile != 0 || (p.token != ast.KindLessThanToken && p.token != ast.KindLessThanLessThanToken) {
 		return nil
 	}
+	// A failed attempt is remembered by position, like notParenthesizedArrow: each attempt parses
+	// the rest of the expression (a type argument can hold a function type, whose parameter
+	// initializers are expressions again), so retrying the same `<` after a rewind would make
+	// input such as `a=b<c<(a=b<c<(...` take time exponential in its nesting.
+	tokenPos := p.scanner.TokenStart()
+	if p.notTypeArguments.Has(tokenPos) {
+		return nil
+	}
 	state := p.mark()
 	if p.reScanLessThanToken() == ast.KindLessThanToken {
 		p.nextToken()
@@ -5354,6 +5363,7 @@ func (p *Parser) tryParseTypeArgumentsInExpression() *ast.NodeList {
 		}
 	}
 	p.rewind(state)
+	p.notTypeArguments.Add(tokenPos)
 	return nil
 }
 

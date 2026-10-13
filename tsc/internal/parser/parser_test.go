@@ -157,6 +157,16 @@ func FuzzParser(f *testing.F) {
 	})
 }
 
+func TestFailedTypeArgumentsInExpressionAreNotRetried(t *testing.T) {
+	t.Parallel()
+	// Each `<` here is first tried as a type argument list, which parses the rest of the input
+	// (as a function type whose parameter initializer is again an expression) before failing.
+	// Without remembering the failed attempt, every level re-parsed its tail several times and
+	// the node count grew ~5x per repetition: about 1.6 million nodes for these 56 characters.
+	file := parsetestutil.ParseTypeScript(strings.Repeat("a=b<c<(", 8), false)
+	assert.Assert(t, file.NodeCount < 10_000, "node count %d", file.NodeCount)
+}
+
 func TestHeritageClauseElementKinds(t *testing.T) {
 	t.Parallel()
 	sourceText := `
